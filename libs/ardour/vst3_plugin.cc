@@ -45,6 +45,7 @@
 #include "ardour/utils.h"
 #include "ardour/vst3_module.h"
 #include "ardour/vst3_plugin.h"
+#include "ardour/vst3_plugin_debug.h"
 
 #include "pbd/i18n.h"
 
@@ -53,6 +54,8 @@ using namespace ARDOUR;
 using namespace Temporal;
 using namespace Steinberg;
 using namespace Presonus;
+
+const char * VST3_CONTROLLER_FLAG = "VST3_CONTROLLER";
 
 VST3Plugin::VST3Plugin (AudioEngine& engine, Session& session, VST3PI* plug)
 	: Plugin (engine, session)
@@ -607,6 +610,7 @@ VST3Plugin::set_state (const XMLNode& node, int version)
 				value /= (n_presets - 1.f);
 			}
 			DEBUG_TRACE (DEBUG::VST3Config, string_compose ("VST3Plugin::set_state: set_program (pgm: %1 plug: %2)\n", value, name ()));
+			// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::set_state _controller->setParamNormalized(%1, %2)\n", _plug->program_change_port ().id, value));
 			_plug->controller ()->setParamNormalized (_plug->program_change_port ().id, value);
 		}
 	}
@@ -1159,6 +1163,7 @@ VST3PI::VST3PI (std::shared_ptr<ARDOUR::VST3PluginModule> m, std::string unique_
 	: _module (m)
 	, _component (0)
 	, _controller (0)
+	, _controller_debug_wrapper (0)
 	, _view (0)
 #if SMTG_OS_LINUX
 	, _run_loop (0)
@@ -1240,6 +1245,10 @@ VST3PI::VST3PI (std::shared_ptr<ARDOUR::VST3PluginModule> m, std::string unique_
 		_component->release ();
 		throw failed_constructor ();
 	}
+
+	// Wrap controller
+	_controller_debug_wrapper = VSTEditControllerDebugger(_controller);
+	_controller = & _controller_debug_wrapper;
 
 	/* The official Steinberg SDK's source/vst/hosting/plugprovider.cpp
 	 * only initializes the controller if it is separate of the component.
@@ -1424,6 +1433,7 @@ VST3PI::terminate ()
 	}
 
 	_controller = 0;
+	_controller_debug_wrapper = 0;
 	_component  = 0;
 }
 
@@ -1632,6 +1642,7 @@ VST3PI::notifyProgramListChange (Vst::ProgramListID, int32)
 	float        v  = 0;
 	Vst::ParamID id = _program_change_port.id;
 	if (id != Vst::kNoParamId) {
+		// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::notifyProgramListChange _controller->getParamNormalized(%1)\n", id));
 		v = _controller->getParamNormalized (id);
 		DEBUG_TRACE (DEBUG::VST3Config, string_compose ("VST3PI::notifyProgramListChange: val: %1 (norm: %2)\n", v, _controller->normalizedParamToPlain (id, v)));
 	}
@@ -1648,6 +1659,8 @@ VST3PI::performEdit (Vst::ParamID id, Vst::ParamValue v)
 		_shadow_data[idx->second] = value;
 		_update_ctrl[idx->second] = true;
 		/* set_parameter_internal() is called via OnParameterChange */
+		// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::performEdit _controller->normalizedParamToPlain(%1, %2)\n", id, value));
+		// FIXME: Remove call to normalizedParam
 		value = _controller->normalizedParamToPlain (id, value);
 		OnParameterChange (ValueChange, idx->second, value); /* EMIT SIGNAL */
 	}
@@ -1872,6 +1885,7 @@ float
 VST3PI::default_value (uint32_t port) const
 {
 	Vst::ParamID id (index_to_id (port));
+	// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::default_value _controller->normalizedParamToPlain(%1, %2)\n", id, _ctrl_params[port].normal));
 	return _controller->normalizedParamToPlain (id, _ctrl_params[port].normal);
 }
 
@@ -1881,8 +1895,11 @@ VST3PI::get_parameter_descriptor (uint32_t port, ParameterDescriptor& desc) cons
 	Param const& p (_ctrl_params[port]);
 	Vst::ParamID id (index_to_id (port));
 
+	// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::get_parameter_descriptor _controller->normalizedParamToPlain 1 (%1, %2)\n", id, 0.f));
 	desc.lower        = _controller->normalizedParamToPlain (id, 0.f);
+	// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::get_parameter_descriptor _controller->normalizedParamToPlain 2 (%1, %2)\n", id, 1.f));
 	desc.upper        = _controller->normalizedParamToPlain (id, 1.f);
+	// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::get_parameter_descriptor _controller->normalizedParamToPlain 3 (%1, %2)\n", id, p.normal));
 	desc.normal       = _controller->normalizedParamToPlain (id, p.normal);
 	desc.toggled      = 1 == p.steps;
 	desc.logarithmic  = false;
@@ -1980,6 +1997,7 @@ void
 VST3PI::set_parameter (uint32_t p, float value, int32 sample_off, bool to_list, bool force)
 {
 	Vst::ParamID id = index_to_id (p);
+	// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::set_parameter _controller->plainParamToNormalized(%1, %2)\n", id, value));
 	value = _controller->plainParamToNormalized (id, value);
 	if (_shadow_data[p] == value && sample_off == 0 && to_list && !force) {
 		return;
@@ -2022,6 +2040,7 @@ VST3PI::set_program (int pgm, int32 sample_off)
 	/* must not be called concurrently with processing */
 	int32 index;
 	_input_param_changes.addParameterData (id, index)->addPoint (sample_off, value, index);
+	// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::set_program _controller->setParamNormalized(%1, %2)\n", id, value));
 	_controller->setParamNormalized (id, value);
 
 #if 0
@@ -2054,6 +2073,7 @@ VST3PI::update_shadow_data ()
 {
 	std::map<uint32_t, Vst::ParamID>::const_iterator i;
 	for (i = _ctrl_index_id.begin (); i != _ctrl_index_id.end (); ++i) {
+		// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::update_shadow_data _controller->getParamNormalized(%1)\n", i->second));
 		Vst::ParamValue v = _controller->getParamNormalized (i->second);
 		if (_shadow_data[i->first] != v) {
 #if 0 // DEBUG
@@ -2086,6 +2106,7 @@ VST3PI::update_contoller_param ()
 		if (host_editing && !parameter_is_automatable (i->first) && !parameter_is_readonly (i->first)) {
 			host_editing->beginEditFromHost (i->second);
 		}
+		// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::update_contoller_param _controller->setParamNormalized(%1, %2)\n", i->second, _shadow_data[i->first]));
 		_controller->setParamNormalized (i->second, _shadow_data[i->first]);
 		if (host_editing && !parameter_is_automatable (i->first) && !parameter_is_readonly (i->first)) {
 			host_editing->endEditFromHost (i->second);
@@ -2124,11 +2145,13 @@ VST3PI::get_parameter (uint32_t p) const
 		if (host_editing && !parameter_is_automatable (p) && !parameter_is_readonly (p)) {
 			host_editing->beginEditFromHost (id);
 		}
+		// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::get_parameter _controller->setParamNormalized(%1, %2)\n", id, _shadow_data[p]));
 		_controller->setParamNormalized (id, _shadow_data[p]); // GUI thread only
 		if (host_editing && !parameter_is_automatable (p) && !parameter_is_readonly (p)) {
 			host_editing->endEditFromHost (id);
 		}
 	}
+	// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::get_parameter _controller->normalizedParamToPlain(%1, %2)\n", id, _shadow_data[p]));
 	return _controller->normalizedParamToPlain (id, _shadow_data[p]);
 }
 

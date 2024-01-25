@@ -31,6 +31,7 @@
 
 #include "ardour/plugin.h"
 #include "ardour/vst3_host.h"
+#include "ardour/vst3_plugin_debug.h"
 
 namespace ARDOUR
 {
@@ -273,10 +274,11 @@ private:
 	std::shared_ptr<ConnectionProxy> _component_cproxy;
 	std::shared_ptr<ConnectionProxy> _controller_cproxy;
 
-	FUID                  _fuid;
-	Vst::IComponent*      _component;
-	Vst::IEditController* _controller;
-	IPlugView*            _view;
+	FUID                  		_fuid;
+	Vst::IComponent*      		_component;
+	Vst::IEditController* 		_controller;
+	ARDOUR::VSTEditControllerDebugger	_controller_debug_wrapper;
+	IPlugView*            		_view;
 
 #if SMTG_OS_LINUX
 	Linux::IRunLoop* _run_loop;
