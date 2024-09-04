@@ -227,7 +227,7 @@ AutomationControl::actually_set_value (double value, PBD::Controllable::GroupCon
 		<< " (was " << old_value << ") @ " << this << std::endl;
 #endif
 
-		Changed (true, gcd);
+		Changed (true, gcd); // FIXME(bonsembiante): This is the reason of 2/3 calls on each edit
 		if (!al || !al->automation_playback ()) {
 			_session.set_dirty ();
 		}
