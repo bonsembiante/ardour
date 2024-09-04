@@ -530,7 +530,7 @@ Plugin::parameter_changed_externally (uint32_t which, float value)
 {
 	_parameter_changed_since_last_preset = true;
 	_session.set_dirty ();
-	ParameterChangedExternally (which, value); /* EMIT SIGNAL */
+	ParameterChangedExternally (which, value); /* EMIT SIGNAL */ // FIXME(bonsembiante): My change is the same like it's done in vst_plugin.cc
 	PresetDirty (); /* EMIT SIGNAL */
 }
 
