@@ -1,8 +1,12 @@
 #include "ardour/vst3_plugin_debug.h"
 
+#include "pbd/error.h"
+#include "pbd/stacktrace.h"
+
 using namespace ARDOUR;
 using namespace Steinberg;
 using namespace Steinberg::Vst;
+using namespace PBD;
 
 const char * VST3_PLUGIN_DEBUG_FLAG = "VST3_CONTROLLER";
 
@@ -15,7 +19,15 @@ VSTEditControllerDebugger::~VSTEditControllerDebugger (){
 }
 
 void VSTEditControllerDebugger::debug(std::string log) {
-	printf("%s", log.c_str());
+	if(!debugEnabled){
+		return;
+	}
+	std::stringstream sync_out;
+
+	sync_out << log.c_str() << std::endl;
+	PBD::stacktrace (sync_out, 30);
+
+	std::cerr << sync_out.str();
 }
 
 tresult VSTEditControllerDebugger::setComponentState (IBStream* state){
@@ -94,7 +106,7 @@ tresult VSTEditControllerDebugger::terminate (){
 }
 
 tresult VSTEditControllerDebugger::queryInterface (const TUID _iid, void** obj){
-	debug("CUSTOM WRAPPER CALL: _controller->queryInterface (_iid, obj)");
+	// debug("CUSTOM WRAPPER CALL: _controller->queryInterface (_iid, obj)");
 	return _controller->queryInterface (_iid, obj);
 }
 

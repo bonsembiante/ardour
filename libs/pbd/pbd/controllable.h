@@ -69,6 +69,27 @@ typedef std::set<std::shared_ptr<Controllable>> ControllableSet;
  * e.g. gain, which is presented to the user in log terms (dB)
  * but passed to the processor as a linear quantity.
  */
+typedef boost::optional<double> optional_double;
+
+template <typename A1>
+class ChangedSignalWrapper : public PBD::Signal3<void, bool, A1, optional_double>
+{
+	public:
+
+		void operator() (bool a1, A1 a2, optional_double a3)
+		{
+			std::stringstream sync_out;
+
+			sync_out << "-------Changed signal emitted" << std::endl;
+			// PBD::stacktrace (sync_out, 15);
+
+			std::cerr << sync_out.str();
+
+			// Emit signal with parent operator
+			PBD::Signal3<void, bool, A1, optional_double>::operator()(a1,a2,a3);
+		};
+};
+
 class LIBPBD_API Controllable : public PBD::StatefulDestructible, public std::enable_shared_from_this<Controllable>
 {
 public:
@@ -146,7 +167,7 @@ public:
 	static PBD::Signal1<void, std::weak_ptr<PBD::Controllable> > GUIFocusChanged;
 	static PBD::Signal1<void, std::weak_ptr<PBD::Controllable> > ControlTouched;
 
-	PBD::Signal2<void,bool,PBD::Controllable::GroupControlDisposition> Changed;
+	ChangedSignalWrapper<PBD::Controllable::GroupControlDisposition> Changed;
 
 	int set_state (const XMLNode&, int version);
 	virtual XMLNode& get_state () const;

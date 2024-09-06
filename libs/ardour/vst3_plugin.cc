@@ -133,7 +133,7 @@ VST3Plugin::parameter_change_handler (VST3PI::ParameterChange t, uint32_t param,
 			Plugin::EndTouch (param);
 			break;
 		case VST3PI::ValueChange:
-			_parameter_queue.write_one (PV (param, value));
+			_parameter_queue.write_one (PV (param, value)); // FIXME(bonsembiante): No se que hace, pareciera q no triggerea nada
 			/* fallthrough */
 		case VST3PI::ParamValueChanged:
 			/* emit ParameterChangedExternally, mark preset dirty */
@@ -1653,16 +1653,17 @@ VST3PI::notifyProgramListChange (Vst::ProgramListID, int32)
 tresult
 VST3PI::performEdit (Vst::ParamID id, Vst::ParamValue v)
 {
+	printf("--------performEdit\n");
 	std::map<Vst::ParamID, uint32_t>::const_iterator idx = _ctrl_id_index.find (id);
 	if (idx != _ctrl_id_index.end ()) {
 		float value               = v;
-		_shadow_data[idx->second] = value;
-		_update_ctrl[idx->second] = true;
+		// _shadow_data[idx->second] = value;
+		// _update_ctrl[idx->second] = true; // FIXME(bonsembiante): Why we need to set it for update if vst ui called performEdit
 		/* set_parameter_internal() is called via OnParameterChange */
 		// PBD::debug_print(VST3_CONTROLLER_FLAG, string_compose("VST3PI::performEdit _controller->normalizedParamToPlain(%1, %2)\n", id, value));
 		// FIXME: Remove call to normalizedParam
 		value = _controller->normalizedParamToPlain (id, value);
-		OnParameterChange (ValueChange, idx->second, value); /* EMIT SIGNAL */
+		OnParameterChange (ParamValueChanged, idx->second, value); /* EMIT SIGNAL */
 	}
 	return kResultOk;
 }
@@ -1670,6 +1671,7 @@ VST3PI::performEdit (Vst::ParamID id, Vst::ParamValue v)
 tresult
 VST3PI::beginEdit (Vst::ParamID id)
 {
+	printf("--------beginEdit\n");
 	std::map<Vst::ParamID, uint32_t>::const_iterator idx = _ctrl_id_index.find (id);
 	if (idx != _ctrl_id_index.end ()) {
 		OnParameterChange (BeginGesture, idx->second, 0); /* EMIT SIGNAL */
@@ -1680,6 +1682,8 @@ VST3PI::beginEdit (Vst::ParamID id)
 tresult
 VST3PI::endEdit (Vst::ParamID id)
 {
+	printf("--------endEdit\n");
+	// _controller_debug_wrapper.debugEnabled = false;
 	std::map<Vst::ParamID, uint32_t>::const_iterator idx = _ctrl_id_index.find (id);
 	if (idx != _ctrl_id_index.end ()) {
 		OnParameterChange (EndGesture, idx->second, 0); /* EMIT SIGNAL */
@@ -3195,6 +3199,7 @@ IPlugView*
 VST3PI::view ()
 {
 	if (!_view) {
+		_controller_debug_wrapper.debugEnabled = true;
 		_view = try_create_view ();
 		if (_view) {
 			_view->setFrame (this);

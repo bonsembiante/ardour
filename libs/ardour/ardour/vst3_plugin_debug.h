@@ -43,6 +43,8 @@ public:
 	uint32 PLUGIN_API addRef ();
 	uint32 PLUGIN_API release ();
 
+	bool debugEnabled = false;
+
 private:
 	IEditController* _controller;
 };
