@@ -42,7 +42,7 @@ namespace ARDOUR {
                 bool newval = fabs (v) >= 0.5;
                 if (newval != _value) {
                         _value = newval;
-                        Changed (true, gcd); /* EMIT SIGNAL */
+                        Changed (true, gcd, v); /* EMIT SIGNAL */
                 }
         }
 }
